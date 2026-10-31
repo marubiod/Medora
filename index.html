@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Medora</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#16403f">
+<link rel="icon" href="icon-192.png">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:17px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:#f2f6f5;color:#14292a}
+header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#16403f;border-bottom:5px solid var(--c)}
+header b{font:700 24px Georgia,serif;color:#fff;flex:1;letter-spacing:.5px}
+header select{width:auto;max-width:55%}
+nav{display:flex;background:#fff;position:sticky;top:0;z-index:2;border-bottom:1px solid #cfdad8}
+nav button{flex:1;border:0;background:none;padding:13px 2px;font:inherit;border-bottom:3px solid transparent;color:#4b6462}
+nav .on{border-color:#16403f;color:#16403f;font-weight:700}
+main{padding:12px 14px 40px;max-width:720px;margin:auto}
+h3{margin:22px 0 6px;font-size:18px}
+label{display:block;margin:12px 0 3px;font-size:14px;color:#3c5553}
+input,select,textarea{width:100%;padding:11px;font:inherit;border:1px solid #9fb2af;border-radius:6px;background:#fff;color:inherit}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid #e0a526;outline-offset:1px}
+.b{font:inherit;background:#16403f;color:#fff;border:0;border-radius:6px;padding:11px 16px;margin:6px 6px 6px 0}
+.b.g{background:#dbe7e5;color:#16403f}.b.r{background:#f6dcd7;color:#9c2a1d}
+.it{background:#fff;margin:0 0 6px;padding:10px 12px;border-left:7px solid #b4c4c1;border-radius:0 8px 8px 0;cursor:pointer}
+.it.i{border-left-color:#16403f}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.chip{font-size:13px;padding:1px 9px;border-radius:12px;background:#dbe7e5;white-space:nowrap}
+.chip.i{background:#16403f;color:#fff}
+.th{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none;background:#dbe7e5;display:block}
+.blk{margin-bottom:14px;border-radius:10px;overflow:hidden}
+.w{color:#a15c00;font-weight:600}.x{color:#b3261e;font-weight:700}
+.fl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.hr{background:#fff;padding:8px 12px;margin-bottom:8px;border-radius:8px}
+.hr b{font:700 26px Georgia,serif}
+.po{display:none}
+@media print{nav,.np,header select{display:none}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.blk{break-inside:avoid}.po{display:block;font-weight:700;margin-bottom:8px}body{background:#fff}header{background:#fff;border-bottom:2px solid #000}header b{color:#000}}
+</style></head><body><div id="app"></div>
+<script>
+const K='medora_v1',COL=['#2f9e8f','#c9702a','#6a5acd','#2f6fb5','#a8892b'];
+let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
+S=S||{perfiles:[],meds:[],visitas:[],tags:['Oftalmología','Cardiología','Psiquiatría','General'],cur:null};
+let V={tab:'meds',kind:'',edit:null,f:{imp:'',tag:'',val:'',est:'activo',eq:'',dup:''}};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){alert('No se ha podido guardar. Exporta una copia y libera espacio.')}};
+const $=s=>document.querySelector(s),uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const days=d=>d?Math.ceil((new Date(d+'T00:00')-new Date().setHours(0,0,0,0))/864e5):null;
+const fd=d=>d?d.split('-').reverse().join('/'):'—',hoy=()=>new Date().toLocaleDateString('es-ES');
+const vig=m=>{const n=days(m.val);return n===null?'Sin fecha de validez':`<span class="${n<0?'x':n<=30?'w':''}">${n<0?'Caducada el ':'Válida hasta '}${fd(m.val)}</span>`};
+const F=(l,k,v,t='text')=>`<label>${l}<input data-f="${k}" type="${t}" value="${esc(v)}"></label>`;
+const T=(l,k,v)=>`<label>${l}<textarea data-f="${k}" rows="4">${esc(v)}</textarea></label>`;
+const O=(a,v)=>a.map(([k,l])=>`<option value="${esc(k)}"${k===v?' selected':''}>${esc(l)}</option>`).join('');
+const SEL=(l,k,v,o)=>`<label>${l}<select data-f="${k}">${O(o,v)}</select></label>`;
+function list(){return S.meds.filter(m=>m.pid===S.cur).filter(m=>{const f=V.f,n=days(m.val);
+return(!f.imp||m.imp===f.imp)&&(!f.tag||(m.tags||[]).includes(f.tag))&&(!f.est||f.eq||f.dup||m.est===f.est)&&(!f.eq||m.eq===f.eq)&&(!f.dup||m.dup)&&(!f.val||(f.val==='cad'?n!==null&&n<0:n!==null&&n>=0&&n<=30))
+}).sort((a,b)=>(a.val||'9').localeCompare(b.val||'9'))}
+const idb=new Promise(r=>{try{const q=indexedDB.open('medora',1);q.onupgradeneeded=()=>q.result.createObjectStore('img');q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}});
+const tx=async(m,f)=>{const d=await idb;if(!d)throw new Error('IndexedDB no disponible');return new Promise((res,rej)=>{const t=d.transaction('img',m),q=f(t.objectStore('img'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)})};
+const idbPut=(k,b)=>tx('readwrite',s=>s.put(b,k)),idbGet=k=>tx('readonly',s=>s.get(k)),idbDel=k=>tx('readwrite',s=>s.delete(k)),idbKeys=()=>tx('readonly',s=>s.getAllKeys());
+const IMG={},imgSrc=m=>IMG[m.imgId]||m.img||'';
+const b2u=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+const u2b=u=>{const[h,d]=u.split(','),s=atob(d),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return new Blob([a],{type:h.slice(5,h.indexOf(';'))})};
+async function migrate(){let c=0;for(const m of S.meds)if(m.img){try{const id=uid()+uid();await idbPut(id,u2b(m.img));m.imgId=id;delete m.img;c=1}catch(e){}}if(c)save()}
+async function loadImgs(){for(const m of S.meds)if(m.imgId&&!IMG[m.imgId]){try{const b=await idbGet(m.imgId);if(b)IMG[m.imgId]=URL.createObjectURL(b)}catch(e){}}}
+async function gc(){try{const u=new Set(S.meds.map(m=>m.imgId).filter(Boolean));for(const k of await idbKeys())if(!u.has(k)){await idbDel(k);if(IMG[k]){URL.revokeObjectURL(IMG[k]);delete IMG[k]}}}catch(e){}}
+const withImgs=ms=>Promise.all(ms.map(async m=>{const c={...m};delete c.imgId;if(m.imgId)try{c.img=await b2u(await idbGet(m.imgId))}catch(e){}return c}));
+const grpName=g=>S.meds.filter(x=>x.pid===S.cur&&x.eq===g).map(x=>x.nombre).join(' / ');
+const eqs=()=>[...new Set(S.meds.filter(m=>m.pid===S.cur&&m.eq).map(m=>m.eq))].sort((a,b)=>grpName(a).localeCompare(grpName(b)));
+const eqOthers=m=>S.meds.filter(x=>x.pid===m.pid&&x.eq===m.eq&&x.id!==m.id).map(x=>x.nombre).join(', ');
+function cleanEq(){['eq','dup'].forEach(k=>{const n={},K=x=>x.pid+'|'+x[k];S.meds.forEach(x=>x[k]&&(n[K(x)]=(n[K(x)]||0)+1));S.meds.forEach(x=>{if(x[k]&&n[K(x)]<2)x[k]=''})})}
+function applyLink(id,list,k){const me=S.meds.find(x=>x.id===id),M=S.meds.filter(x=>x.pid===me.pid),keep=new Set(list||[]),old=me[k];
+if(old)M.filter(x=>x[k]===old&&x.id!==id&&!keep.has(x.id)).forEach(x=>x[k]='');
+const ks=M.filter(x=>keep.has(x.id));
+if(!ks.length)me[k]='';
+else{const gs=new Set([old,...ks.map(x=>x[k])].filter(Boolean)),t=old||[...gs][0]||'g'+uid();
+M.filter(x=>gs.has(x[k])).forEach(x=>x[k]=t);ks.forEach(x=>x[k]=t);me[k]=t}
+cleanEq()}
+const tok=s=>new Set(s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/(\d)([a-z%])/g,'$1 $2').replace(/([a-z%])(\d)/g,'$1 $2').split(/[^a-z0-9%]+/).filter(Boolean));
+const isW=x=>/^[a-z]{3,}$/.test(x)&&x!=='mcg';
+function best(n,v,pool){const A=tok(n);let r=[0,null];pool.forEach(m=>{const B=tok(m.nombre);if(![...A].some(x=>isW(x)&&B.has(x)))return;const s=[...A].filter(x=>B.has(x)).length/Math.min(A.size,B.size)+(m.val===v?.01:0);if(s>r[0])r=[s,m]});return r}
+const clean=n=>{let s=n.replace(/(\d)(MG|MCG|G|ML|UI)\b/gi,'$1 $2');if(/\d\s?(MG|MCG|G|ML|%|UI)/i.test(s))s=s.replace(/\s+\d{1,3}$/,'');s=s.toLowerCase();return s[0].toUpperCase()+s.slice(1)};
+function parsePage(c,W){const it=c.items.filter(i=>i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5],f:i.fontName}));
+const t=it.find(i=>i.s==='HOJA DE TRATAMIENTO'),p=it.find(i=>i.s==='Paciente:');if(!t||!p)return[];
+const top=p.y-5,N=it.filter(i=>i.f===t.f&&i.x<W*.3&&i.y<top).sort((a,b)=>b.y-a.y),D=it.filter(i=>/^\d\d\/\d\d\/\d{4}$/.test(i.s)&&i.x>W*.85&&i.y<top);
+const G=[];N.forEach(n=>{const g=G[G.length-1];if(g&&g.y-n.y<16){g.s+=' '+n.s;g.y=n.y}else G.push({s:n.s,y:n.y,y0:n.y})});
+return G.map(g=>{let b=null;D.forEach(d=>{if(!d.u&&Math.abs(d.y-(g.y0-2))<9&&(!b||Math.abs(d.y-g.y0)<Math.abs(b.y-g.y0)))b=d});if(b)b.u=1;
+return{n:g.s,v:b?b.s.split('/').reverse().join('-'):''}})}
+const PJ='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+const lib=()=>window.pdfjsLib?Promise.resolve():new Promise((r,j)=>{const s=document.createElement('script');s.src=PJ+'pdf.min.js';s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc=PJ+'pdf.worker.min.js';r()};s.onerror=()=>j(new Error('hace falta conexión a internet la primera vez para cargar el lector de PDF'));document.head.appendChild(s)});
+async function pdfImport(f){if(!f)return;try{await lib();const d=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise,L=[];
+for(let n=1;n<=d.numPages;n++){const p=await d.getPage(n);L.push(...parsePage(await p.getTextContent(),p.getViewport({scale:1}).width))}
+if(!L.length)throw new Error('no se han encontrado medicamentos');
+const pool=S.meds.filter(m=>m.pid===S.cur),used=new Set(),hit=new Set(),rows=L.map(r=>{const[s,m]=best(r.n,r.v,pool.filter(x=>!used.has(x.id))),q=s>=.8?'e':s>=.5?'p':'';if(q==='e')used.add(m.id);if(q)hit.add(m.id);
+return{n:clean(r.n),v:r.v,m:q?m.id:'',q,a:q==='e'?(m.val!==r.v?'upd':'skip'):q==='p'?'skip':'add'}});
+V.imp={rows,sus:[],gone:pool.filter(m=>m.est==='activo'&&!hit.has(m.id)).map(m=>m.id)};V.tab='pdf';V.edit=null;render();scrollTo(0,0)}catch(e){alert('No se pudo leer el PDF: '+e.message)}}
+const vPdf=p=>{const I=V.imp,nm=id=>S.meds.find(x=>x.id===id),ch=I.rows.map((r,i)=>[r,i]).filter(([r])=>!(r.q==='e'&&nm(r.m).val===r.v));
+return`<main><h3>Hoja de tratamiento · ${esc(p.nombre)}</h3><p>${I.rows.length} medicamentos leídos, ${I.rows.length-ch.length} sin cambios.</p>`+
+(ch.map(([r,i])=>{const m=r.m&&nm(r.m);return`<div class="hr"><b>${esc(r.n)}</b> · ${fd(r.v)}${m?`<br>${r.q==='e'?'Ya existe':'Posible coincidencia'}: ${esc(m.nombre)} (hasta ${fd(m.val)})`:'<br>No está en tu lista'}<select data-a="pdfrow" data-i="${i}">${O([...(m?[['upd','Actualizar su fecha de validez']]:[]),['add','Añadir como nuevo'],['skip','Ignorar']],r.a)}</select></div>`}).join('')||'<p>No hay cambios.</p>')+
+(I.gone.length?`<h3>Ya no aparecen en la hoja</h3><p>Marca los que quieras pasar a suspendidos:</p>`+I.gone.map(id=>`<label><input type="checkbox" style="width:auto" data-a="gsel" data-id="${id}"${I.sus.includes(id)?' checked':''}> ${esc(nm(id).nombre)}</label>`).join(''):'')+
+`<div style="margin-top:14px"><button class="b" data-a="pdfok">Aplicar cambios</button><button class="b g" data-a="pdfno">Cancelar</button></div></main>`};
+function applyEq(id,eqm){const me=S.meds.find(x=>x.id===id),M=S.meds.filter(x=>x.pid===me.pid),keep=new Set(eqm||[]),old=me.eq;
+if(old)M.filter(x=>x.eq===old&&x.id!==id&&!keep.has(x.id)).forEach(x=>x.eq='');
+const ks=M.filter(x=>keep.has(x.id));
+if(!ks.length)me.eq='';
+else{const gs=new Set([old,...ks.map(x=>x.eq)].filter(Boolean)),t=old||[...gs][0]||'g'+uid();
+M.filter(x=>gs.has(x.eq)).forEach(x=>x.eq=t);ks.forEach(x=>x.eq=t);me.eq=t}
+cleanEq()}
+const vigente=m=>m.est==='activo'&&(days(m.val)===null||days(m.val)>=0);
+const head=p=>`<header style="--c:${p?p.col:'#2f9e8f'}"><b>Medora</b>${p?`<select data-a="cur">${O(S.perfiles.map(x=>[x.id,x.nombre]),p.id)}</select>`:''}</header>`+
+(p&&!V.edit?`<nav class="np">${[['meds','Medicación'],['hor','Cuadrante'],['vis','Visitas'],['dat','Datos']].map(([k,l])=>`<button data-a="tab" data-v="${k}" class="${V.tab===k?'on':''}">${l}</button>`).join('')}</nav>`:'');
+const vMeds=p=>{const L=list(),f=V.f;
+return`<main><div class="po">${esc(p.nombre)} · ${hoy()}</div><div class="np"><div class="fl">
+<select data-a="flt" data-k="imp">${O([['','Todas las importancias'],['importante','Importantes'],['secundario','Secundarios']],f.imp)}</select>
+<select data-a="flt" data-k="tag">${O([['','Todos los grupos'],...S.tags.map(t=>[t,t])],f.tag)}</select>
+<select data-a="flt" data-k="val">${O([['','Cualquier vigencia'],['pro','Caducan en 30 días'],['cad','Caducadas']],f.val)}</select>
+<select data-a="flt" data-k="est">${O([['activo','Activos'],['suspendido','Suspendidos'],['','Todos']],f.est)}</select>
+<select data-a="flt" data-k="eq">${O([['','Todas las equivalencias'],...eqs().map(x=>[x,grpName(x)])],f.eq)}</select>
+<select data-a="flt" data-k="dup">${O([['','Duplicados: todos'],['si','Solo duplicados']],f.dup)}</select></div>
+<button class="b" data-a="newmed">Añadir medicamento</button><button class="b g" data-a="print">Imprimir o guardar PDF</button></div>`+
+(L.map(m=>`<div class="it ${m.imp==='importante'?'i':''}" data-a="editmed" data-id="${m.id}"><div style="display:flex;gap:10px">${imgSrc(m)?`<img class="th" src="${imgSrc(m)}" alt="">`:'<span class="th"></span>'}<div style="flex:1;min-width:0"><div class="row"><b>${esc(m.nombre)}</b><span class="chip ${m.imp==='importante'?'i':''}">${m.imp}</span></div>${vig(m)}${m.est!=='activo'?' · suspendido':''}${f.eq?(vigente(m)?' · <b>VIGENTE</b>':' · no vigente'):''}${m.eq&&!f.eq?`<div><span class="chip">≡ ${esc(eqOthers(m))}</span></div>`:''}${m.dup?`<div><span class="chip" style="background:#f6dcd7">⚠ Duplicado de ${esc(S.meds.filter(x=>x.pid===m.pid&&x.dup===m.dup&&x.id!==m.id).map(x=>x.nombre).join(', '))}</span></div>`:''}</div></div></div>`).join('')||'<p>No hay medicamentos con estos filtros.</p>')+`<p class="np">${L.length} en la lista</p></main>`};
+const MOM=h=>{const n=+h.slice(0,2);return n>=5&&n<11?['☀️ Mañana','#f2b705','#3a2b00','#fff6d6']:n>=11&&n<15?['🌤️ Mediodía','#c2410c','#fff','#ffe9dc']:n>=15&&n<20?['🌆 Tarde','#1d7a8c','#fff','#dff3f6']:['🌙 Noche','#3b3f8f','#fff','#e6e7fa']};
+const vHor=p=>{const A=S.meds.filter(m=>m.pid===p.id&&m.est==='activo'),ex=V.ex||[],g={};
+A.filter(m=>!ex.includes(m.id)).forEach(m=>(m.tomas||[]).forEach(t=>t.h&&(g[t.h]=g[t.h]||[]).push([m,t])));
+return`<main><div class="po">${esc(p.nombre)} · ${hoy()}</div><div class="np"><button class="b g" data-a="print">Imprimir o guardar PDF</button><button class="b g" data-a="xlist">${V.xl?'Ocultar selección':'Elegir medicamentos'}</button><label style="display:inline-block;margin-left:6px"><input type="checkbox" data-a="xfoto" style="width:auto"${V.nofoto?'':' checked'}> Con fotos</label>
+${V.xl?`<div class="hr"><select data-a="xtag">${O([['','Todos los grupos'],...S.tags.map(t=>[t,'Solo '+t])],V.xt||'')}</select><button class="b g" data-a="xall">Todos</button><button class="b g" data-a="xnone">Ninguno</button>${A.map(m=>`<label><input type="checkbox" style="width:auto" data-a="xsel" data-id="${m.id}"${ex.includes(m.id)?'':' checked'}> ${esc(m.nombre)}</label>`).join('')}</div>`:''}</div>`+
+(Object.keys(g).sort().map(h=>{const[l,bg,fg,ti]=MOM(h);return`<div class="blk" style="background:${ti};border:3px solid ${bg}"><div style="background:${bg};color:${fg};padding:6px 14px;display:flex;justify-content:space-between;align-items:baseline"><b style="font:700 34px Georgia,serif">${h}</b><b style="font-size:22px">${l}</b></div>${g[h].map(([m,t])=>`<div style="display:flex;gap:12px;align-items:center;padding:8px 14px;border-top:1px solid ${bg}55">${!V.nofoto&&imgSrc(m)?`<img class="th" style="width:72px;height:72px" src="${imgSrc(m)}" alt="">`:''}<div style="font-size:22px;line-height:1.25"><b>${esc(m.nombre)}</b><br>${esc(t.d||m.dosis)}${t.c?`<br><i style="font-size:19px">⚠ ${esc(t.c)}</i>`:''}</div></div>`).join('')}</div>`}).join('')||'<p>No hay tomas que mostrar. Añade horas en la ficha de cada medicamento o revisa la selección.</p>')+'</main>'};
+const vVis=p=>`<main><button class="b np" data-a="newvis">Añadir visita</button>`+(S.visitas.filter(v=>v.pid===p.id).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(v=>`<div class="it" data-a="editvis" data-id="${v.id}"><b>${fd(v.fecha)}</b>${v.prox?` · próxima revisión ${fd(v.prox)}`:''}<div>${esc((v.res||'').slice(0,160))}</div></div>`).join('')||'<p>Aún no hay visitas registradas.</p>')+'</main>';
+const vDat=p=>`<main><h3>Perfiles</h3>${S.perfiles.map(x=>`<div class="it row" style="border-left-color:${x.col}" data-a="editper" data-id="${x.id}"><span><b>${esc(x.nombre)}</b><br>Tarjeta sanitaria: ${esc(x.tarjeta)||'—'}</span></div>`).join('')}${S.perfiles.length<5?'<button class="b" data-a="newper">Añadir perfil</button>':''}
+<h3>Hoja de tratamiento (PDF)</h3><button class="b" data-a="pdfpick">Importar PDF actualizado</button><input type="file" id="pdf" accept="application/pdf" hidden>
+<p style="font-size:14px">Se lee en tu dispositivo: el PDF no se sube a ningún sitio.</p>
+<h3>Copias de seguridad</h3><button class="b" data-a="expall">Exportar todo</button><button class="b g" data-a="expp">Exportar solo ${esc(p.nombre)}</button>
+<button class="b g" data-a="pick">Importar copia de seguridad</button><input type="file" id="fi" accept="application/json,.json" hidden>
+<label>O pega aquí el contenido del archivo<textarea id="pt" rows="3"></textarea></label><button class="b g" data-a="paste">Importar texto pegado</button>
+<p style="font-size:14px">Los archivos exportados contienen datos de salud: guárdalos en un lugar privado.</p></main>`;
+const form=()=>{const e=V.edit,k=V.kind;let h='<main>';
+if(k==='per')h+=F('Nombre','nombre',e.nombre)+F('Número de tarjeta sanitaria','tarjeta',e.tarjeta)+(S.perfiles.length||e.id?'':'<button class="b g" data-a="pick">O importa una copia de seguridad</button><input type="file" id="fi" accept="application/json,.json" hidden>');
+if(k==='vis')h+=F('Fecha de la revisión','fecha',e.fecha,'date')+T('Resultado y cambios de pauta','res',e.res)+F('Próxima revisión','prox',e.prox,'date');
+if(k==='med')h+=F('Nombre comercial','nombre',e.nombre)+F('Principio activo','pa',e.pa)+`<label>Equivalentes (otros medicamentos que pueden darle en su lugar)</label>${(e.eqm||[]).map(id=>{const x=S.meds.find(y=>y.id===id);return x?`<div class="row hr"><span>${esc(x.nombre)}</span><button class="b r" data-a="deleq" data-id="${id}">Quitar</button></div>`:''}).join('')}<select data-a="addeq"><option value="">Añadir equivalente…</option>${S.meds.filter(x=>x.pid===S.cur&&x.id!==e.id&&!(e.eqm||[]).includes(x.id)).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select><label>Duplicado de</label>${(e.dqm||[]).map(id=>{const x=S.meds.find(y=>y.id===id);return x?`<div class="row hr"><span>${esc(x.nombre)}</span><button class="b r" data-a="deldup" data-id="${id}">Quitar</button></div>`:''}).join('')}<select data-a="adddup"><option value="">Marcar como duplicado de…</option>${S.meds.filter(x=>x.pid===S.cur&&x.id!==e.id&&!(e.dqm||[]).includes(x.id)).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select><label>Foto</label>${imgSrc(e)?`<img class="th" style="width:140px;height:140px" src="${imgSrc(e)}" alt="">`:''}<div><button class="b g" data-a="foto">${imgSrc(e)?'Cambiar foto':'Añadir foto'}</button>${imgSrc(e)?'<button class="b r" data-a="nofoto">Quitar foto</button>':''}<input type="file" id="im" accept="image/*" hidden></div>`+SEL('Importancia','imp',e.imp,[['importante','Importante'],['secundario','Secundario']])+SEL('Estado','est',e.est,[['activo','Activo'],['suspendido','Suspendido']])+F('Dosis (1 gota en OI, 1 grágea…)','dosis',e.dosis)+
+`<label>Grupos</label>${S.tags.map(t=>`<label style="display:inline-block;margin-right:14px"><input type="checkbox" data-t="${esc(t)}" style="width:auto"${e.tags.includes(t)?' checked':''}> ${esc(t)}</label>`).join('')}<div class="row"><input data-f="newtag" placeholder="Nuevo grupo" value="${esc(e.newtag)}"><button class="b g" data-a="addtag">Añadir</button></div>`+
+F('Prescrito por','pres',e.pres)+F('Fecha de validez','val',e.val,'date')+T('Descripción','desc',e.desc)+'<h3>Tomas</h3>'+
+e.tomas.map((t,i)=>`<div class="hr"><div class="fl"><input type="time" data-i="${i}" data-k="h" value="${esc(t.h)}"><input data-i="${i}" data-k="d" placeholder="Dosis (opcional)" value="${esc(t.d)}"></div><input data-i="${i}" data-k="c" placeholder="Condiciones: en ayunas, no tumbarse…" value="${esc(t.c)}"><button class="b r" data-a="deltoma" data-i="${i}">Quitar toma</button></div>`).join('')+'<button class="b g" data-a="addtoma">Añadir toma</button>';
+return h+`<div style="margin-top:14px"><button class="b" data-a="commit">Guardar</button><button class="b g" data-a="cancel">Cancelar</button>${e.id?'<button class="b r" data-a="del">Eliminar</button>':''}</div></main>`};
+function render(){
+if(!S.perfiles.length&&!V.edit){V.kind='per';V.edit={nombre:'',tarjeta:''}}
+const p=S.perfiles.find(x=>x.id===S.cur)||S.perfiles[0];if(p)S.cur=p.id;
+$('#app').innerHTML=head(p)+(V.edit?form():{meds:vMeds,hor:vHor,vis:vVis,dat:vDat,pdf:vPdf}[V.tab](p))}
+function sync(){const e=V.edit;if(!e)return;
+document.querySelectorAll('[data-f]').forEach(i=>e[i.dataset.f]=i.value);
+if(V.kind==='med'){e.tags=[...document.querySelectorAll('[data-t]:checked')].map(i=>i.dataset.t);
+document.querySelectorAll('[data-k]').forEach(i=>e.tomas[i.dataset.i][i.dataset.k]=i.value)}}
+function commit(){sync();const e=V.edit,k=V.kind;delete e.newtag;const eqm=e.eqm,dqm=e.dqm;
+if(k!=='vis'&&!(e.nombre||'').trim()){alert('Falta el nombre.');return false}
+const A={med:S.meds,vis:S.visitas,per:S.perfiles}[k];
+if(!e.id){e.id=uid();if(k==='per'){e.col=COL[S.perfiles.length%5];S.cur=e.id}else e.pid=S.cur}
+delete e.eqm;delete e.dqm;const i=A.findIndex(x=>x.id===e.id);i<0?A.push(e):A[i]=e;if(k==='med'){applyEq(e.id,eqm);applyLink(e.id,dqm,'dup')}V.edit=null;save();gc();return true}
+function remove(){const e=V.edit,k=V.kind;
+if(k==='per'){S.perfiles=S.perfiles.filter(x=>x.id!==e.id);S.meds=S.meds.filter(x=>x.pid!==e.id);S.visitas=S.visitas.filter(x=>x.pid!==e.id);S.cur=S.perfiles[0]?.id}
+else if(k==='med'){S.meds=S.meds.filter(x=>x.id!==e.id);cleanEq()}else S.visitas=S.visitas.filter(x=>x.id!==e.id);
+V.edit=null;save();gc()}
+async function dl(name,obj){const b=new Blob([JSON.stringify(obj)],{type:'application/json'}),f=new File([b],name,{type:'application/json'});
+if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return}catch(e){if(e.name==='AbortError')return}}
+const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click()}
+function readFile(f){if(f)f.text().then(importText)}
+async function importText(t){try{const d=JSON.parse(t),ps=d.perfiles||[];if(!ps.length)throw new Error('el archivo no contiene perfiles');
+const nuevos=ps.filter(p=>!S.perfiles.some(x=>x.id===p.id)).length;
+if(S.perfiles.length+nuevos>5)return alert('Máximo 5 perfiles.');
+if(!confirm('Se importarán '+ps.length+' perfil(es). Si ya existen, se sustituirán sus datos. ¿Continuar?'))return;
+ps.forEach(p=>{S.perfiles=S.perfiles.filter(x=>x.id!==p.id);S.perfiles.push(p);S.meds=S.meds.filter(x=>x.pid!==p.id);S.visitas=S.visitas.filter(x=>x.pid!==p.id)});
+S.meds.push(...(d.meds||[]).map(m=>{delete m.imgId;return m}));S.visitas.push(...(d.visitas||[]));
+(d.tags||[]).forEach(t=>S.tags.includes(t)||S.tags.push(t));
+S.perfiles.forEach((p,i)=>p.col=p.col||COL[i%5]);if(ps[0])S.cur=ps[0].id;V.edit=null;V.tab='meds';save();await migrate();await loadImgs();await gc();render();alert('Importados '+(d.meds||[]).length+' medicamentos.')}catch(e){alert('No se pudo importar: '+e.message)}}
+function photo(f){if(!f)return;const u=URL.createObjectURL(f),i=new Image();
+i.onload=()=>{const s=Math.min(1,300/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*s);c.height=Math.round(i.height*s);
+c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);
+c.toBlob(async b=>{sync();try{const id=uid()+uid();await idbPut(id,b);IMG[id]=URL.createObjectURL(b);V.edit.imgId=id;V.edit.img=''}catch(e){V.edit.img=c.toDataURL('image/jpeg',.6)}render()},'image/jpeg',.6)};
+i.onerror=()=>alert('No se ha podido leer la imagen.');i.src=u}
+const NEW={med:()=>({nombre:'',pa:'',eq:'',imgId:'',imp:'importante',dosis:'',tags:[],pres:'',val:'',desc:'',est:'activo',tomas:[]}),vis:()=>({fecha:new Date().toISOString().slice(0,10),res:'',prox:''}),per:()=>({nombre:'',tarjeta:''})};
+function act(a,d,v){
+if(a==='cur'){S.cur=v;save()}
+else if(a==='tab')V.tab=d.v;
+else if(a==='flt')V.f[d.k]=v;
+else if(a==='print')return print();
+else if(a==='pick'){$('#fi').click();return}
+else if(a==='paste'){importText($('#pt').value);return}
+else if(a==='foto'){$('#im').click();return}
+else if(a==='nofoto'){sync();V.edit.img='';V.edit.imgId=''}
+else if(a==='addeq'){sync();if(v){const b=S.meds.find(x=>x.id===v),s=new Set(V.edit.eqm||[]);s.add(v);if(b.eq)S.meds.filter(x=>x.pid===b.pid&&x.eq===b.eq&&x.id!==V.edit.id).forEach(x=>s.add(x.id));V.edit.eqm=[...s]}}
+else if(a==='deleq'){sync();V.edit.eqm=(V.edit.eqm||[]).filter(x=>x!==d.id)}
+else if(a==='adddup'){sync();if(v){const b=S.meds.find(x=>x.id===v),s=new Set(V.edit.dqm||[]);s.add(v);if(b.dup)S.meds.filter(x=>x.pid===b.pid&&x.dup===b.dup&&x.id!==V.edit.id).forEach(x=>s.add(x.id));V.edit.dqm=[...s]}}
+else if(a==='deldup'){sync();V.edit.dqm=(V.edit.dqm||[]).filter(x=>x!==d.id)}
+else if(a==='pdfpick'){$('#pdf').click();return}
+else if(a==='pdfrow')V.imp.rows[+d.i].a=v;
+else if(a==='gsel'){V.imp.sus=V.imp.sus.filter(x=>x!==d.id);if(v)V.imp.sus.push(d.id)}
+else if(a==='pdfno'){V.imp=null;V.tab='dat'}
+else if(a==='pdfok'){let A=0,U=0;V.imp.rows.forEach(r=>{if(r.a==='add'){S.meds.push({id:uid(),pid:S.cur,nombre:r.n,pa:'',imp:'secundario',eq:'',imgId:'',dosis:'',tags:[],pres:'',val:r.v,desc:'',est:'activo',tomas:[]});A++}else if(r.a==='upd'){S.meds.find(x=>x.id===r.m).val=r.v;U++}});
+V.imp.sus.forEach(id=>S.meds.find(x=>x.id===id).est='suspendido');save();alert(A+' añadidos, '+U+' fechas actualizadas y '+V.imp.sus.length+' suspendidos.');V.imp=null;V.tab='meds'}
+else if(a==='xlist')V.xl=!V.xl;
+else if(a==='xfoto')V.nofoto=!v;
+else if(a==='xsel'){V.ex=(V.ex||[]).filter(x=>x!==d.id);if(!v)V.ex.push(d.id)}
+else if(a==='xall'){V.ex=[];V.xt=''}
+else if(a==='xnone')V.ex=S.meds.filter(m=>m.pid===S.cur&&m.est==='activo').map(m=>m.id);
+else if(a==='xtag'){V.xt=v;V.ex=v?S.meds.filter(m=>m.pid===S.cur&&m.est==='activo'&&!(m.tags||[]).includes(v)).map(m=>m.id):[]}
+else if(a==='newmed'||a==='newvis'||a==='newper'){V.kind=a.slice(3,6)==='med'?'med':a==='newvis'?'vis':'per';V.edit=NEW[V.kind]()}
+else if(a==='editmed'||a==='editvis'||a==='editper'){V.kind={editmed:'med',editvis:'vis',editper:'per'}[a];
+V.edit=structuredClone({med:S.meds,vis:S.visitas,per:S.perfiles}[V.kind].find(x=>x.id===d.id));V.edit.tags??=[];V.edit.tomas??=[];V.edit.eqm=S.meds.filter(x=>x.pid===S.cur&&x.eq&&x.eq===V.edit.eq&&x.id!==V.edit.id).map(x=>x.id);V.edit.dqm=S.meds.filter(x=>x.pid===S.cur&&x.dup&&x.dup===V.edit.dup&&x.id!==V.edit.id).map(x=>x.id)}
+else if(a==='cancel')V.edit=null;
+else if(a==='commit'){if(!commit())return}
+else if(a==='del'){if(!confirm('¿Eliminar definitivamente?'))return;remove()}
+else if(a==='addtoma'){sync();V.edit.tomas.push({h:'',d:'',c:''})}
+else if(a==='deltoma'){sync();V.edit.tomas.splice(+d.i,1)}
+else if(a==='addtag'){sync();const n=(V.edit.newtag||'').trim();if(n){if(!S.tags.includes(n)){S.tags.push(n);save()}if(!V.edit.tags.includes(n))V.edit.tags.push(n)}V.edit.newtag=''}
+else if(a==='expall')withImgs(S.meds).then(m=>dl('medora-copia-completa.json',{v:1,tags:S.tags,perfiles:S.perfiles,meds:m,visitas:S.visitas}));
+else if(a==='expp'){const p=S.perfiles.find(x=>x.id===S.cur);withImgs(S.meds.filter(x=>x.pid===p.id)).then(m=>dl('medora-'+p.nombre.replace(/\W/g,'')+'.json',{v:1,tags:S.tags,perfiles:[p],meds:m,visitas:S.visitas.filter(x=>x.pid===p.id)}))}
+render();if(!['addtoma','deltoma','addtag','flt','addeq','deleq','adddup','deldup','pdfrow','gsel','xlist','xfoto','xsel','xall','xnone','xtag'].includes(a))scrollTo(0,0)}
+document.addEventListener('click',ev=>{const t=ev.target.closest('[data-a]');if(!t||/^(SELECT|INPUT|OPTION)$/.test(t.tagName))return;act(t.dataset.a,t.dataset)});
+document.addEventListener('change',ev=>{const t=ev.target;if(t.id==='im')return photo(t.files[0]);if(t.id==='pdf')return pdfImport(t.files[0]);if(t.type==='file')return readFile(t.files[0]);if(t.type==='checkbox'&&t.dataset.a)return act(t.dataset.a,t.dataset,t.checked);if(t.tagName==='SELECT'&&t.dataset.a)act(t.dataset.a,t.dataset,t.value)});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+try{navigator.storage?.persist?.()}catch(e){}
+render();
+(async()=>{try{await migrate();await loadImgs();await gc()}catch(e){}if(!V.edit)render()})();
+</script></body></html>

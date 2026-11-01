@@ -48,8 +48,8 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const days=d=>d?Math.ceil((new Date(d+'T00:00')-new Date().setHours(0,0,0,0))/864e5):null;
 const fd=d=>d?d.split('-').reverse().join('/'):'—',hoy=()=>new Date().toLocaleDateString('es-ES');
 const vig=m=>{const n=days(m.val);return n===null?'Sin fecha de validez':`<span class="${n<0?'x':n<=30?'w':''}">${n<0?'Caducada el ':'Válida hasta '}${fd(m.val)}</span>`};
-const F=(l,k,v,t='text')=>`<label>${l}<input data-f="${k}" type="${t}" value="${esc(v)}"></label>`;
-const T=(l,k,v)=>`<label>${l}<textarea data-f="${k}" rows="4">${esc(v)}</textarea></label>`;
+const F=(l,k,v,t='text')=>`<label>${l}<input data-f="${k}"${k==='pa'?' data-big="1"':''} type="${t}" value="${esc(v)}"></label>`;
+const T=(l,k,v)=>`<label>${l}<textarea data-f="${k}" data-big="1" rows="4">${esc(v)}</textarea></label>`;
 const O=(a,v)=>a.map(([k,l])=>`<option value="${esc(k)}"${k===v?' selected':''}>${esc(l)}</option>`).join('');
 const SEL=(l,k,v,o)=>`<label>${l}<select data-f="${k}">${O(o,v)}</select></label>`;
 function list(){return S.meds.filter(m=>m.pid===S.cur).filter(m=>{const f=V.f,n=days(m.val);
@@ -138,18 +138,18 @@ const form=()=>{const e=V.edit,k=V.kind;let h='<main>';
 if(k==='per')h+=F('Nombre','nombre',e.nombre)+F('Número de tarjeta sanitaria','tarjeta',e.tarjeta)+(S.perfiles.length||e.id?'':'<button class="b g" data-a="pick">O importa una copia de seguridad</button><input type="file" id="fi" accept="application/json,.json" hidden>');
 if(k==='vis')h+=F('Fecha de la revisión','fecha',e.fecha,'date')+T('Resultado y cambios de pauta','res',e.res)+F('Próxima revisión','prox',e.prox,'date');
 if(k==='med')h+=F('Nombre comercial','nombre',e.nombre)+F('Principio activo','pa',e.pa)+`<label>Equivalentes (otros medicamentos que pueden darle en su lugar)</label>${(e.eqm||[]).map(id=>{const x=S.meds.find(y=>y.id===id);return x?`<div class="row hr"><span>${esc(x.nombre)}</span><button class="b r" data-a="deleq" data-id="${id}">Quitar</button></div>`:''}).join('')}<select data-a="addeq"><option value="">Añadir equivalente…</option>${S.meds.filter(x=>x.pid===S.cur&&x.id!==e.id&&!(e.eqm||[]).includes(x.id)).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select><label>Duplicado de</label>${(e.dqm||[]).map(id=>{const x=S.meds.find(y=>y.id===id);return x?`<div class="row hr"><span>${esc(x.nombre)}</span><button class="b r" data-a="deldup" data-id="${id}">Quitar</button></div>`:''}).join('')}<select data-a="adddup"><option value="">Marcar como duplicado de…</option>${S.meds.filter(x=>x.pid===S.cur&&x.id!==e.id&&!(e.dqm||[]).includes(x.id)).sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select><label>Foto</label>${imgSrc(e)?`<img class="th" style="width:140px;height:140px" src="${imgSrc(e)}" alt="">`:''}<div><button class="b g" data-a="foto">${imgSrc(e)?'Cambiar foto':'Añadir foto'}</button>${imgSrc(e)?'<button class="b r" data-a="nofoto">Quitar foto</button>':''}<input type="file" id="im" accept="image/*" hidden></div>`+SEL('Importancia','imp',e.imp,[['importante','Importante'],['secundario','Secundario']])+SEL('Estado','est',e.est,[['activo','Activo'],['suspendido','Inactivo']])+F('Dosis (1 gota en OI, 1 grágea…)','dosis',e.dosis)+
-`<label>Grupos</label>${S.tags.map(t=>`<label style="display:inline-block;margin-right:14px"><input type="checkbox" data-t="${esc(t)}" style="width:auto"${e.tags.includes(t)?' checked':''}> ${esc(t)}</label>`).join('')}<div class="row"><input data-f="newtag" placeholder="Nuevo grupo" value="${esc(e.newtag)}"><button class="b g" data-a="addtag">Añadir</button></div>`+
+`<label>Grupos</label><div>${e.tags.map(t=>`<span class="chip" style="font-size:15px;padding:3px 4px 3px 10px;margin:0 6px 6px 0;display:inline-flex;gap:6px;align-items:center">${esc(t)}<button class="b r" style="padding:0 8px;margin:0" data-a="untag" data-g="${esc(t)}" aria-label="Quitar ${esc(t)}">✕</button></span>`).join('')||'<small>Ninguno seleccionado</small>'}</div><select data-a="addtg"><option value="">Añadir grupo…</option>${S.tags.filter(t=>!e.tags.includes(t)).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select><div class="row"><input data-f="newtag" placeholder="Nuevo grupo" value="${esc(e.newtag)}"><button class="b g" data-a="addtag">Añadir</button></div>`+
 F('Prescrito por','pres',e.pres)+F('Fecha de validez','val',e.val,'date')+T('Descripción','desc',e.desc)+'<h3>Tomas</h3>'+
 e.tomas.map((t,i)=>`<div class="hr"><div class="fl"><input type="time" data-i="${i}" data-k="h" value="${esc(t.h)}"><input data-i="${i}" data-k="d" placeholder="Dosis (opcional)" value="${esc(t.d)}"></div><input data-i="${i}" data-k="c" placeholder="Condiciones: en ayunas, no tumbarse…" value="${esc(t.c)}"><button class="b r" data-a="deltoma" data-i="${i}">Quitar toma</button></div>`).join('')+'<button class="b g" data-a="addtoma">Añadir toma</button>';
 return h+`<div style="margin-top:14px"><button class="b" data-a="commit">Guardar</button><button class="b g" data-a="cancel">Cancelar</button>${e.id?'<button class="b r" data-a="del">Eliminar</button>':''}</div></main>`};
 function render(){
 if(!S.perfiles.length&&!V.edit){V.kind='per';V.edit={nombre:'',tarjeta:''}}
 const p=S.perfiles.find(x=>x.id===S.cur)||S.perfiles[0];if(p)S.cur=p.id;
-$('#app').innerHTML=head(p)+(V.crop?vCrop():V.edit?form():{meds:vMeds,hor:vHor,vis:vVis,dat:vDat,pdf:vPdf}[V.tab](p));
-if(V.crop)initCrop()}
+$('#app').innerHTML=head(p)+(V.crop?vCrop():V.edit?form():{meds:vMeds,hor:vHor,vis:vVis,dat:vDat,pdf:vPdf}[V.tab](p))+(V.big?vBig():'');
+if(V.crop)initCrop();if(V.big){const t=$('#bt');t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
 function sync(){const e=V.edit;if(!e)return;
 document.querySelectorAll('[data-f]').forEach(i=>e[i.dataset.f]=i.value);
-if(V.kind==='med'){e.tags=[...document.querySelectorAll('[data-t]:checked')].map(i=>i.dataset.t);
+if(V.kind==='med'){
 document.querySelectorAll('[data-k]').forEach(i=>e.tomas[i.dataset.i][i.dataset.k]=i.value)}}
 function commit(){sync();const e=V.edit,k=V.kind;delete e.newtag;const eqm=e.eqm,dqm=e.dqm;
 if(k!=='vis'&&!(e.nombre||'').trim()){alert('Falta el nombre.');return false}
@@ -184,6 +184,7 @@ let a=0,lo=0,hi=255;for(let i=0;i<256;i++){a+=H[i];if(a>n*.01){lo=i;break}}a=0;f
 const k=hi>lo+20?255/(hi-lo):1,c=v=>Math.max(0,Math.min(255,v));
 for(let i=0;i<p.length;i+=4){const r=(p[i]-lo)*k,y=(p[i+1]-lo)*k,b=(p[i+2]-lo)*k,l=.3*r+.59*y+.11*b;p[i]=c(l+(r-l)*1.2);p[i+1]=c(l+(y-l)*1.2);p[i+2]=c(l+(b-l)*1.2)}
 g.putImageData(d,0,0)}
+const vBig=()=>`<div style="position:fixed;inset:0;z-index:20;background:#f2f6f5;padding:14px;display:flex;flex-direction:column;gap:10px"><b style="font-size:18px">${esc(V.big.l)}</b><textarea id="bt" style="flex:1;font-size:21px;line-height:1.4">${esc(V.edit[V.big.k])}</textarea><div><button class="b" data-a="bigok">Listo</button><button class="b g" data-a="bigno">Cancelar</button></div></div>`;
 const vCrop=()=>`<main><h3>Ajustar foto</h3><p>Arrastra la imagen para centrar el medicamento y usa el control para ampliar.</p><canvas id="cv" width="300" height="300" style="width:300px;max-width:100%;touch-action:none;border:2px solid #16403f;border-radius:8px;background:#fff"></canvas><label>Ampliar<input type="range" id="zm" min="1" max="4" step="0.05" value="${V.crop.z}"></label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="en" style="width:auto"${V.crop.enh?' checked':''}> Mejorar color y contraste</label><div style="margin-top:12px"><button class="b" data-a="cropok">Usar esta foto</button><button class="b g" data-a="cropno">Cancelar</button></div></main>`;
 function initCrop(){const cv=$('#cv'),C=V.crop,go=()=>drawC(cv,C);go();let p=null;
 cv.onpointerdown=e=>{p=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)};
@@ -214,6 +215,10 @@ else if(a==='rentag'){const n=(prompt('Nuevo nombre del grupo:',d.g)||'').trim()
 else if(a==='deltag'){const c=S.meds.filter(m=>(m.tags||[]).includes(d.g)).length;if(!confirm('¿Eliminar el grupo «'+d.g+'»?'+(c?' Se quitará de '+c+' medicamento(s), que no se borran.':'')))return;S.tags=S.tags.filter(t=>t!==d.g);S.meds.forEach(m=>m.tags&&(m.tags=m.tags.filter(t=>t!==d.g)));if(V.f.tag===d.g)V.f.tag='';save()}
 else if(a==='cropno'){URL.revokeObjectURL(V.crop.u);V.crop=null}
 else if(a==='cropok'){const cv=$('#cv'),u=V.crop.u;cv.toBlob(async b=>{try{const id=uid()+uid();await idbPut(id,b);IMG[id]=URL.createObjectURL(b);V.edit.imgId=id;V.edit.img=''}catch(e){V.edit.img=cv.toDataURL('image/jpeg',.6)}URL.revokeObjectURL(u);V.crop=null;render()},'image/jpeg',.6);return}
+else if(a==='bigok'){V.edit[V.big.k]=$('#bt').value;V.big=null}
+else if(a==='bigno')V.big=null;
+else if(a==='addtg'){sync();if(v&&!V.edit.tags.includes(v))V.edit.tags.push(v)}
+else if(a==='untag'){sync();V.edit.tags=V.edit.tags.filter(x=>x!==d.g)}
 else if(a==='xlist')V.xl=!V.xl;
 else if(a==='xfoto')V.nofoto=!v;
 else if(a==='xsel'){V.ex=(V.ex||[]).filter(x=>x!==d.id);if(!v)V.ex.push(d.id)}
@@ -231,9 +236,10 @@ else if(a==='deltoma'){sync();V.edit.tomas.splice(+d.i,1)}
 else if(a==='addtag'){sync();const n=(V.edit.newtag||'').trim();if(n){if(!S.tags.includes(n)){S.tags.push(n);save()}if(!V.edit.tags.includes(n))V.edit.tags.push(n)}V.edit.newtag=''}
 else if(a==='expall')withImgs(S.meds).then(m=>dl('medora-copia-completa.json',{v:1,tags:S.tags,perfiles:S.perfiles,meds:m,visitas:S.visitas}));
 else if(a==='expp'){const p=S.perfiles.find(x=>x.id===S.cur);withImgs(S.meds.filter(x=>x.pid===p.id)).then(m=>dl('medora-'+p.nombre.replace(/\W/g,'')+'.json',{v:1,tags:S.tags,perfiles:[p],meds:m,visitas:S.visitas.filter(x=>x.pid===p.id)}))}
-render();if(!['addtoma','deltoma','addtag','flt','addeq','deleq','adddup','deldup','pdfrow','gsel','rentag','deltag','xlist','xfoto','xsel','xall','xnone','xtag'].includes(a))scrollTo(0,0)}
+render();if(!['addtoma','deltoma','addtag','flt','addeq','deleq','adddup','deldup','pdfrow','gsel','rentag','deltag','bigok','bigno','addtg','untag','xlist','xfoto','xsel','xall','xnone','xtag'].includes(a))scrollTo(0,0)}
 document.addEventListener('click',ev=>{const t=ev.target.closest('[data-a]');if(!t||/^(SELECT|INPUT|OPTION)$/.test(t.tagName))return;act(t.dataset.a,t.dataset)});
 document.addEventListener('change',ev=>{const t=ev.target;if(t.id==='im')return photo(t.files[0]);if(t.id==='pdf')return pdfImport(t.files[0]);if(t.type==='file')return readFile(t.files[0]);if(t.type==='checkbox'&&t.dataset.a)return act(t.dataset.a,t.dataset,t.checked);if(t.tagName==='SELECT'&&t.dataset.a)act(t.dataset.a,t.dataset,t.value)});
+document.addEventListener('focusin',ev=>{const t=ev.target;if(!t.dataset||!t.dataset.big||!V.edit||V.big)return;sync();V.big={k:t.dataset.f,l:t.closest('label').childNodes[0].textContent.trim()};t.blur();render()});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
 try{navigator.storage?.persist?.()}catch(e){}
 render();
